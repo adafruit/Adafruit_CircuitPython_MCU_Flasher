@@ -1,5 +1,3 @@
-"""Verifies the flash contents of a SAMD51."""
-
 import array
 import board
 import digitalio
@@ -7,28 +5,32 @@ import time
 
 from adafruit_debug_probe import bitbang
 import adafruit_mcu_flasher
-from adafruit_mcu_flasher import samx5
+from adafruit_mcu_flasher import sam
 
 BASE_ADDR = 0
-FILE_BOOTLOADER = "bootloader-metro_m4-v3.15.0.bin"
+FILE_BOOTLOADER = "bootloader-metro_m0-v3.15.0.bin"
 
 probe = bitbang.BitbangProbe(
     clk=digitalio.DigitalInOut(board.D12),
     dio=digitalio.DigitalInOut(board.D11),
-    nreset=digitalio.DigitalInOut(board.D10),
-    drive_mode=digitalio.DriveMode.PUSH_PULL
+    nreset=digitalio.DigitalInOut(board.D10)
 )
-target = samx5.SAMx5(probe)
+target = sam.SAM(probe)
 target.target_connect()
 target.select()
 
+print("Erasing... ", end="")
+target.erase()
+print(" done.")
+
 start = time.monotonic()
+target.program_start()
 
 with open(FILE_BOOTLOADER, "rb") as f:
     if FILE_BOOTLOADER.endswith(".bin"):
-        adafruit_mcu_flasher.write_bin_file(target, f, BASE_ADDR, verify_only=True)
+        adafruit_mcu_flasher.write_bin_file(target, f, BASE_ADDR)
     else:
-        adafruit_mcu_flasher.write_hex_file(target, f, verify_only=True)
+        adafruit_mcu_flasher.write_hex_file(target, f)
 
 print(f"Done in {time.monotonic()-start:.1f}s")
 

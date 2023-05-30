@@ -6,7 +6,14 @@
 
 from . import sam
 
-import supervisor
+from micropython import const
+
+IS_CIRCUITPYTHON = False
+try:
+    import supervisor
+    IS_CIRCUITPYTHON = True
+except ModuleNotFoundError:
+    pass
 import time
 
 __version__ = "0.0.0+auto.0"
@@ -75,8 +82,6 @@ class SAMx5(sam.SAM):
         self.reset_with_extension()
 
     def select(self):
-        self.reset_with_extension()
-
         device_id = self.read_word(_DAP_DSU_DID)
         print("device_id", hex(device_id))
         if device_id not in SAMDx5_DEVICES:
@@ -137,7 +142,8 @@ class SAMx5(sam.SAM):
             raise RuntimeError("Will never write User Row fuses as all 0s or all 1s!")
 
         # Turn off autoreload because we don't want to erase but not write the user row.
-        supervisor.runtime.autoreload = False
+        if IS_CIRCUITPYTHON:
+            supervisor.runtime.autoreload = False
         # Erase the page
         self.write_word(_NVMCTRL_CTRLA, 0x4)
         self.write_word(_NVMCTRL_ADDR, _USER_ROW_ADDR)
@@ -156,7 +162,8 @@ class SAMx5(sam.SAM):
             self.write_word(_NVMCTRL_CTRLB, _NVMCTRL_CMD_WQW)
             while (self.read_word(_NVMCTRL_INTFLAG) & 1) == 0:
                 pass
-        supervisor.runtime.autoreload = True
+        if IS_CIRCUITPYTHON:
+            supervisor.runtime.autoreload = True
 
         # Needs to reset the MCU, for it to reread the fuses
         time.sleep(1)

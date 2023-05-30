@@ -7,9 +7,12 @@
 from . import DapTarget
 from micropython import const
 
-from adafruit_debug_probe.bitbang import PROTOCOL_PINS
-
-import supervisor
+IS_CIRCUITPYTHON = False
+try:
+    import supervisor
+    IS_CIRCUITPYTHON = True
+except ModuleNotFoundError:
+    pass
 import time
 
 __version__ = "0.0.0+auto.0"
@@ -92,12 +95,23 @@ class SAM(DapTarget):
         self.locked = None
         self.page_size = 256 # erase size
 
+    def target_connect(self, swj_clock=5000):
+        self.probe.disconnect()
+        self.probe.connect()
+        self.probe.set_clock(swj_clock)
+        self.reset_with_extension()
+        # dap_idle_cycles 0
+        # dap_retry_count 128
+        # dap_match_retry_count 128
+
     def reset_with_extension(self):
         # bring the CPU out of reset while holding swclk low
-        self.probe.write_pins(PROTOCOL_PINS, 0x11, 0x00)
-        self.probe.write_pins(PROTOCOL_PINS, 0x11, 0x10)
-        self.probe.write_pins(PROTOCOL_PINS, 0x11, 0x11)
-        super().target_connect()
+        pins = self.probe.PinGroup.PROTOCOL_PINS
+        self.probe.write_pins(pins, 0x11, 0x00)
+        time.sleep(0.1)
+        self.probe.write_pins(pins, 0x11, 0x10)
+        self.probe.write_pins(pins, 0x11, 0x11)
+        self.reset_link()
         self.target_prepare()
 
     def finish_reset(self):
@@ -162,7 +176,8 @@ class SAM(DapTarget):
 
 
         # Turn off autoreload because we don't want to erase but not write the user row.
-        supervisor.runtime.autoreload = False
+        if IS_CIRCUITPYTHON:
+            supervisor.runtime.autoreload = False
         self.write_word(_NVMCTRL_CTRLB, 0)
         self.write_word(_NVMCTRL_ADDR, _USER_ROW_ADDR >> 1)
         self.write_word(_NVMCTRL_CTRLA, _NVMCTRL_CMD_EAR)
@@ -171,7 +186,8 @@ class SAM(DapTarget):
 
         print("write", self._user_row)
         self.write_block(_USER_ROW_ADDR, self._user_row)
-        supervisor.runtime.autoreload = True
+        if IS_CIRCUITPYTHON:
+            supervisor.runtime.autoreload = True
 
         # Needs to reset the MCU, for it to reread the fuses
         time.sleep(1)
@@ -217,8 +233,9 @@ class SAM(DapTarget):
 
         self.write_block(addr, buf)
 
-    def program_flash(self, addr, buf, do_verify=True) -> bool:
-        start_addr = self.program_start(addr);
+    def program_flash(self, addr, buf, do_verify=True, verify_only=False) -> bool:
+        if not verify_only:
+            start_addr = self.program_start(addr);
 
         offset = 0
         while offset < len(buf):
@@ -239,10 +256,8 @@ class SAM(DapTarget):
                     hasdata = True
                     break
 
-            if hasdata:
+            if hasdata and not verify_only:
                 self.program_block(start_addr + offset, data)
-            else:
-                print("no data", addr + offset)
 
             # Optionally verify the written data
             if hasdata and do_verify:

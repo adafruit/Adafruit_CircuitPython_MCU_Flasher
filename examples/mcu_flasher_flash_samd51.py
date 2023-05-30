@@ -1,5 +1,3 @@
-"""Verifies the flash contents of a SAMD51."""
-
 import array
 import board
 import digitalio
@@ -22,13 +20,18 @@ target = samx5.SAMx5(probe)
 target.target_connect()
 target.select()
 
+print("Erasing... ", end="")
+target.erase()
+print(" done.")
+
 start = time.monotonic()
+target.program_start()
 
 with open(FILE_BOOTLOADER, "rb") as f:
     if FILE_BOOTLOADER.endswith(".bin"):
-        adafruit_mcu_flasher.write_bin_file(target, f, BASE_ADDR, verify_only=True)
+        adafruit_mcu_flasher.write_bin_file(target, f, BASE_ADDR)
     else:
-        adafruit_mcu_flasher.write_hex_file(target, f, verify_only=True)
+        adafruit_mcu_flasher.write_hex_file(target, f)
 
 print(f"Done in {time.monotonic()-start:.1f}s")
 
